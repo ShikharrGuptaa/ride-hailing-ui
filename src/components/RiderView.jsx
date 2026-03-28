@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '../services/api';
+import { connectWebSocket, subscribe } from '../services/websocket';
 import LocationPicker from './LocationPicker';
 
 const RIDE_STATUS = {
@@ -91,9 +92,12 @@ export default function RiderView() {
     restore();
   }, []);
 
-  // Poll ride status
+  // Poll ride status (fallback, stops when completed)
   useEffect(() => {
-    if (!ride?.id || ride?.status?.id === 206 || ride?.status?.id === 207) return;
+    if (!ride?.id || ride?.status?.id >= 206) {
+      if (pollRef.current) clearInterval(pollRef.current);
+      return;
+    }
     const poll = async () => {
       const res = await api.getRide(ride.id);
       if (res.success) {
@@ -104,7 +108,7 @@ export default function RiderView() {
         }
       }
     };
-    pollRef.current = setInterval(poll, 2000);
+    pollRef.current = setInterval(poll, 10000);
     return () => clearInterval(pollRef.current);
   }, [ride?.id, ride?.status?.id]);
 
@@ -130,6 +134,19 @@ export default function RiderView() {
       setRide(res.data);
       addLog(`Ride created! Status: ${RIDE_STATUS[res.data.status?.id]}`);
       if (res.data.driverId) addLog(`Driver matched: ${res.data.driverId?.slice(0, 8)}...`);
+
+      // Subscribe to real-time ride updates
+      connectWebSocket(() => {
+        subscribe(`/topic/rides/${res.data.id}`, async (updatedRide) => {
+          addLog(`🔔 Ride update: ${RIDE_STATUS[updatedRide.status?.id]}`);
+          setRide(updatedRide);
+          // Fetch trip when ride is accepted or completed
+          if (updatedRide.status?.id >= 204) {
+            const tripRes = await api.getTripByRide(updatedRide.id);
+            if (tripRes.success && tripRes.data) setTrip(tripRes.data);
+          }
+        });
+      });
     } else addLog(`Error: ${res.error?.message}`);
     setLoading(false);
   };

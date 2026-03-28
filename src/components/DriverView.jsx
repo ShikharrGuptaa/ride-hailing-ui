@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '../services/api';
+import { connectWebSocket, subscribe, disconnect } from '../services/websocket';
 import { MapContainer, TileLayer, Marker } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -108,7 +109,7 @@ export default function DriverView() {
       }
     };
     poll();
-    pollRef.current = setInterval(poll, 3000);
+    pollRef.current = setInterval(poll, 10000);
     return () => clearInterval(pollRef.current);
   }, [driver?.id, isOnline]);
 
@@ -130,7 +131,23 @@ export default function DriverView() {
     await api.updateDriverStatus(driver.id, 101);
     await api.updateDriverLocation(driver.id, location.lat, location.lng);
     setIsOnline(true);
-    addLog(`Online at (${location.lat}, ${location.lng})`);
+    addLog('Online — listening for rides via WebSocket');
+
+    // Connect WebSocket and subscribe to available rides
+    connectWebSocket(() => {
+      subscribe('/topic/rides/available', (ride) => {
+        addLog(`🔔 New ride available! Fare: ₹${ride.estimatedFare}`);
+        setAvailableRides(prev => {
+          if (prev.find(r => r.id === ride.id)) return prev;
+          return [...prev, ride];
+        });
+      });
+      subscribe(`/topic/drivers/${driver.id}/rides`, (ride) => {
+        addLog(`📍 Ride update: status ${ride.status?.id}`);
+        setAssignedRide(ride);
+      });
+    });
+
     setLoading(false);
   };
 
@@ -138,7 +155,8 @@ export default function DriverView() {
     setLoading(true);
     await api.updateDriverStatus(driver.id, 102);
     setIsOnline(false);
-    addLog('Went offline');
+    disconnect();
+    addLog('Went offline — WebSocket disconnected');
     setLoading(false);
   };
 
@@ -232,9 +250,6 @@ export default function DriverView() {
           <label className="form-label">Full Name</label>
           <input type="text" placeholder="Enter your name" required value={regForm.name}
             onChange={(e) => setRegForm({ ...regForm, name: e.target.value })} />
-          <label className="form-label">Phone Number</label>
-          <input type="tel" placeholder="10-digit mobile number" required pattern="[6-9][0-9]{9}" maxLength={10}
-            value={regForm.phone} onChange={(e) => setRegForm({ ...regForm, phone: e.target.value })} />
           <label className="form-label">Vehicle Type</label>
           <select value={regForm.vehicleTypeId}
             onChange={(e) => setRegForm({ ...regForm, vehicleTypeId: Number(e.target.value) })}>
@@ -243,7 +258,7 @@ export default function DriverView() {
           <label className="form-label">License Plate</label>
           <input type="text" placeholder="e.g. MH01AB1234" required value={regForm.licensePlate}
             onChange={(e) => setRegForm({ ...regForm, licensePlate: e.target.value })} />
-          <button type="submit" disabled={loading}>{loading ? 'Please wait...' : '→ Continue'}</button>
+          <button type="submit" disabled={loading}>{loading ? 'Please wait...' : '→ Register'}</button>
         </form>
       </div>
     );
