@@ -1,33 +1,40 @@
 const BASE = 'http://localhost:8080/v1';
 
-async function request(path, options = {}) {
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
+function getToken(role) {
+  return localStorage.getItem(`${role}Token`);
+}
+
+async function request(path, options = {}, role = null) {
+  const headers = { 'Content-Type': 'application/json' };
+  const token = role ? getToken(role) : (getToken('rider') || getToken('driver'));
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(`${BASE}${path}`, { headers, ...options });
   return res.json();
 }
 
 export const api = {
+  // Auth - no token needed
   createRider: (data) => request('/riders', { method: 'POST', body: JSON.stringify(data) }),
-  getRider: (id) => request(`/riders/${id}`),
-
   createDriver: (data) => request('/drivers', { method: 'POST', body: JSON.stringify(data) }),
-  getDriver: (id) => request(`/drivers/${id}`),
-  updateDriverStatus: (id, statusId) => request(`/drivers/${id}/status`, { method: 'POST', body: JSON.stringify({ statusId }) }),
-  updateDriverLocation: (id, lat, lng) => request(`/drivers/${id}/location`, { method: 'POST', body: JSON.stringify({ lat, lng }) }),
 
-  createRide: (data) => request('/rides', { method: 'POST', body: JSON.stringify(data) }),
-  getRide: (id) => request(`/rides/${id}`),
+  // Rider endpoints
+  getRider: (id) => request(`/riders/${id}`, {}, 'rider'),
+  createRide: (data) => request('/rides', { method: 'POST', body: JSON.stringify(data) }, 'rider'),
+  getRide: (id) => request(`/rides/${id}`, {}, 'rider'),
+  createPayment: (tripId, paymentMethodId) => request('/payments', { method: 'POST', body: JSON.stringify({ tripId, paymentMethodId }) }, 'rider'),
+  confirmPayment: (paymentId, razorpayPaymentId) => request(`/payments/${paymentId}/confirm`, { method: 'POST', body: JSON.stringify({ razorpayPaymentId }) }, 'rider'),
+  getPaymentByTrip: (tripId) => request(`/payments/by-trip/${tripId}`, {}, 'rider'),
 
-  acceptRide: (driverId, rideId) => request(`/drivers/${driverId}/accept`, { method: 'POST', body: JSON.stringify({ rideId }) }),
-  getActiveRide: (driverId) => request(`/drivers/${driverId}/active-ride`),
+  // Driver endpoints
+  getDriver: (id) => request(`/drivers/${id}`, {}, 'driver'),
+  updateDriverStatus: (id, statusId) => request(`/drivers/${id}/status`, { method: 'POST', body: JSON.stringify({ statusId }) }, 'driver'),
+  updateDriverLocation: (id, lat, lng) => request(`/drivers/${id}/location`, { method: 'POST', body: JSON.stringify({ lat, lng }) }, 'driver'),
+  acceptRide: (driverId, rideId) => request(`/drivers/${driverId}/accept`, { method: 'POST', body: JSON.stringify({ rideId }) }, 'driver'),
+  getActiveRide: (driverId) => request(`/drivers/${driverId}/active-ride`, {}, 'driver'),
   getAvailableRides: (vehicleTypeId) => request(`/rides/available?vehicleTypeId=${vehicleTypeId}`),
 
+  // Shared
   getTripByRide: (rideId) => request(`/trips/by-ride/${rideId}`),
-  endTrip: (tripId, endLat, endLng) => request(`/trips/${tripId}/end`, { method: 'POST', body: JSON.stringify({ endLat, endLng }) }),
-
-  createPayment: (tripId, paymentMethodId) => request('/payments', { method: 'POST', body: JSON.stringify({ tripId, paymentMethodId }) }),
-  confirmPayment: (paymentId, razorpayPaymentId) => request(`/payments/${paymentId}/confirm`, { method: 'POST', body: JSON.stringify({ razorpayPaymentId }) }),
-  getPaymentByTrip: (tripId) => request(`/payments/by-trip/${tripId}`),
+  endTrip: (tripId, endLat, endLng) => request(`/trips/${tripId}/end`, { method: 'POST', body: JSON.stringify({ endLat, endLng }) }, 'driver'),
 };

@@ -78,7 +78,11 @@ export default function DriverView() {
     e.preventDefault();
     setLoading(true);
     const res = await api.createDriver(regForm);
-    if (res.success) { setDriver(res.data); addLog(`Registered as ${res.data.name}`); }
+    if (res.success) {
+      localStorage.setItem('driverToken', res.data.token);
+      setDriver(res.data.user);
+      addLog(`Registered as ${res.data.user.name}`);
+    }
     else addLog(`Error: ${res.error?.message}`);
     setLoading(false);
   };
@@ -170,6 +174,7 @@ export default function DriverView() {
         <button className="btn-small" onClick={() => {
           localStorage.removeItem('driver');
           localStorage.removeItem('driverOnline');
+          localStorage.removeItem('driverToken');
           setDriver(null); setIsOnline(false); setAssignedRide(null); setTrip(null); setLogs([]);
         }}>Logout</button>
       </div>

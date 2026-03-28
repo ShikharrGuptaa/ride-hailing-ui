@@ -86,7 +86,11 @@ export default function RiderView() {
     e.preventDefault();
     setLoading(true);
     const res = await api.createRider(regForm);
-    if (res.success) { setRider(res.data); addLog(`Registered as ${res.data.name}`); }
+    if (res.success) {
+      localStorage.setItem('riderToken', res.data.token);
+      setRider(res.data.user);
+      addLog(`Registered as ${res.data.user.name}`);
+    }
     else addLog(`Error: ${res.error?.message}`);
     setLoading(false);
   };
@@ -158,7 +162,7 @@ export default function RiderView() {
   };
 
   const logout = () => {
-    ['rider', 'riderRide', 'riderTrip', 'riderPayment', 'riderLogs'].forEach(k => localStorage.removeItem(k));
+    ['rider', 'riderRide', 'riderTrip', 'riderPayment', 'riderLogs', 'riderToken'].forEach(k => localStorage.removeItem(k));
     setRider(null); setRide(null); setTrip(null); setPayment(null); setLogs([]);
   };
 
