@@ -14,9 +14,11 @@ async function request(path, options = {}, role = null) {
 }
 
 export const api = {
-  // Auth - no token needed
+  // Auth
   createRider: (data) => request('/riders', { method: 'POST', body: JSON.stringify(data) }),
   createDriver: (data) => request('/drivers', { method: 'POST', body: JSON.stringify(data) }),
+  lookupRider: (phone) => request(`/riders/lookup?phone=${phone}`),
+  lookupDriver: (phone) => request(`/drivers/lookup?phone=${phone}`),
 
   // Rider endpoints
   getRider: (id) => request(`/riders/${id}`, {}, 'rider'),
@@ -32,7 +34,10 @@ export const api = {
   updateDriverLocation: (id, lat, lng) => request(`/drivers/${id}/location`, { method: 'POST', body: JSON.stringify({ lat, lng }) }, 'driver'),
   acceptRide: (driverId, rideId) => request(`/drivers/${driverId}/accept`, { method: 'POST', body: JSON.stringify({ rideId }) }, 'driver'),
   getActiveRide: (driverId) => request(`/drivers/${driverId}/active-ride`, {}, 'driver'),
+  getDriverEarnings: (driverId) => request(`/drivers/${driverId}/earnings`, {}, 'driver'),
   getAvailableRides: (vehicleTypeId) => request(`/rides/available?vehicleTypeId=${vehicleTypeId}`),
+  estimateFare: (pickupLat, pickupLng, destLat, destLng, vehicleTypeId) =>
+    request(`/rides/estimate?pickupLat=${pickupLat}&pickupLng=${pickupLng}&destLat=${destLat}&destLng=${destLng}&vehicleTypeId=${vehicleTypeId}`),
 
   // Shared
   getTripByRide: (rideId) => request(`/trips/by-ride/${rideId}`),

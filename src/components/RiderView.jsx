@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '../services/api';
+import LocationPicker from './LocationPicker';
 
 const RIDE_STATUS = {
   201: 'REQUESTED', 202: 'MATCHING', 203: 'DRIVER_ASSIGNED',
@@ -24,10 +25,21 @@ export default function RiderView() {
 
   const [regForm, setRegForm] = useState({ name: '', phone: '', email: '' });
   const [rideForm, setRideForm] = useState({
-    pickupLat: 19.076, pickupLng: 72.877,
-    destinationLat: 19.100, destinationLng: 72.900,
+    pickupLat: 0, pickupLng: 0,
+    destinationLat: 0, destinationLng: 0,
     vehicleTypeId: 501,
   });
+  const [fareEstimate, setFareEstimate] = useState(null);
+
+  // Get user's actual location for pickup default
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => setRideForm(prev => ({ ...prev, pickupLat: pos.coords.latitude, pickupLng: pos.coords.longitude })),
+        () => {} // leave as 0 if denied
+      );
+    }
+  }, []);
 
   const addLog = (msg) => {
     setLogs((prev) => {
@@ -39,6 +51,20 @@ export default function RiderView() {
 
   // Persist state changes
   useEffect(() => { if (rider) save('rider', rider); }, [rider]);
+
+  // Fetch fare estimate when locations change
+  useEffect(() => {
+    if (!rideForm.pickupLat || !rideForm.destinationLat) return;
+    const fetchEstimate = async () => {
+      const res = await api.estimateFare(
+        rideForm.pickupLat, rideForm.pickupLng,
+        rideForm.destinationLat, rideForm.destinationLng,
+        rideForm.vehicleTypeId
+      );
+      if (res.success) setFareEstimate(res.data);
+    };
+    fetchEstimate();
+  }, [rideForm.pickupLat, rideForm.pickupLng, rideForm.destinationLat, rideForm.destinationLng, rideForm.vehicleTypeId]);
   useEffect(() => { save('riderRide', ride); }, [ride]);
   useEffect(() => { save('riderTrip', trip); }, [trip]);
   useEffect(() => { save('riderPayment', payment); }, [payment]);
@@ -166,18 +192,55 @@ export default function RiderView() {
     setRider(null); setRide(null); setTrip(null); setPayment(null); setLogs([]);
   };
 
+  const [phoneInput, setPhoneInput] = useState('');
+  const [showFullForm, setShowFullForm] = useState(false);
+
+  const checkPhone = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    const res = await api.lookupRider(phoneInput);
+    if (res.success && res.data) {
+      localStorage.setItem('riderToken', res.data.token);
+      setRider(res.data.user);
+      addLog(`Welcome back, ${res.data.user.name}!`);
+    } else {
+      setShowFullForm(true);
+      setRegForm({ ...regForm, phone: phoneInput });
+      addLog('New rider — please complete registration.');
+    }
+    setLoading(false);
+  };
+
   if (!rider) {
+    if (!showFullForm) {
+      return (
+        <div className="panel">
+          <h2>👤 Rider</h2>
+          <p className="muted" style={{marginBottom: 12}}>Enter your phone number to login or register.</p>
+          <form onSubmit={checkPhone}>
+            <label className="form-label">Phone Number</label>
+            <input type="tel" placeholder="10-digit mobile number" required pattern="[6-9][0-9]{9}" maxLength={10}
+              value={phoneInput} onChange={(e) => setPhoneInput(e.target.value)} />
+            <button type="submit" disabled={loading}>{loading ? 'Checking...' : '→ Continue'}</button>
+          </form>
+        </div>
+      );
+    }
     return (
       <div className="panel">
-        <h2>👤 Rider Registration</h2>
+        <h2>👤 Complete Registration</h2>
+        <p className="muted" style={{marginBottom: 12}}>Phone: {regForm.phone}</p>
         <form onSubmit={register}>
-          <input type="text" placeholder="Name" required value={regForm.name}
+          <label className="form-label">Full Name</label>
+          <input type="text" placeholder="Enter your name" required value={regForm.name}
             onChange={(e) => setRegForm({ ...regForm, name: e.target.value })} />
-          <input type="tel" placeholder="Phone (10 digits)" required pattern="[6-9][0-9]{9}" maxLength={10}
+          <label className="form-label">Phone Number</label>
+          <input type="tel" placeholder="10-digit mobile number" required pattern="[6-9][0-9]{9}" maxLength={10}
             value={regForm.phone} onChange={(e) => setRegForm({ ...regForm, phone: e.target.value })} />
-          <input type="email" placeholder="Email" value={regForm.email}
+          <label className="form-label">Email (optional)</label>
+          <input type="email" placeholder="your@email.com" value={regForm.email}
             onChange={(e) => setRegForm({ ...regForm, email: e.target.value })} />
-          <button type="submit" disabled={loading}>{loading ? 'Registering...' : 'Register'}</button>
+          <button type="submit" disabled={loading}>{loading ? 'Please wait...' : '→ Continue'}</button>
         </form>
       </div>
     );
@@ -207,23 +270,34 @@ export default function RiderView() {
             </>
           ) : (
             <form onSubmit={requestRide}>
-              <div className="form-row">
-                <input type="number" step="any" placeholder="Pickup Lat" value={rideForm.pickupLat}
-                  onChange={(e) => setRideForm({ ...rideForm, pickupLat: Number(e.target.value) })} />
-                <input type="number" step="any" placeholder="Pickup Lng" value={rideForm.pickupLng}
-                  onChange={(e) => setRideForm({ ...rideForm, pickupLng: Number(e.target.value) })} />
-              </div>
-              <div className="form-row">
-                <input type="number" step="any" placeholder="Dest Lat" value={rideForm.destinationLat}
-                  onChange={(e) => setRideForm({ ...rideForm, destinationLat: Number(e.target.value) })} />
-                <input type="number" step="any" placeholder="Dest Lng" value={rideForm.destinationLng}
-                  onChange={(e) => setRideForm({ ...rideForm, destinationLng: Number(e.target.value) })} />
-              </div>
+              <LocationPicker
+                pickup={{ lat: rideForm.pickupLat, lng: rideForm.pickupLng }}
+                destination={{ lat: rideForm.destinationLat, lng: rideForm.destinationLng }}
+                onPickupChange={(lat, lng) => setRideForm({ ...rideForm, pickupLat: lat, pickupLng: lng })}
+                onDestinationChange={(lat, lng) => setRideForm({ ...rideForm, destinationLat: lat, destinationLng: lng })}
+              />
+              <label className="form-label">Vehicle Type</label>
               <select value={rideForm.vehicleTypeId}
                 onChange={(e) => setRideForm({ ...rideForm, vehicleTypeId: Number(e.target.value) })}>
                 {VEHICLE_TYPES.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
               </select>
-              <button type="submit" disabled={loading}>🚗 Request Ride</button>
+              <button type="submit" disabled={loading || !rideForm.pickupLat || !rideForm.destinationLat}>
+                🚗 Request Ride
+              </button>
+              {fareEstimate && (
+                <div className="fare-estimate">
+                  <h4>💰 Fare Estimate</h4>
+                  <div className="fare-grid">
+                    <span>Base fare</span><span>₹{fareEstimate.baseFare}</span>
+                    <span>Distance ({fareEstimate.distanceKm} km)</span><span>₹{fareEstimate.distanceFare}</span>
+                    <span>Time ({fareEstimate.durationMin} min)</span><span>₹{fareEstimate.timeFare}</span>
+                    {fareEstimate.surgeMultiplier > 1 && (
+                      <><span>Surge ({fareEstimate.surgeMultiplier}x)</span><span>Applied</span></>
+                    )}
+                    <span className="fare-total">Total</span><span className="fare-total">₹{fareEstimate.estimatedFare}</span>
+                  </div>
+                </div>
+              )}
             </form>
           )}
         </div>
@@ -233,8 +307,14 @@ export default function RiderView() {
           {trip ? (
             <>
               <div className={`status-badge trip-${trip.status?.id}`}>{TRIP_STATUS[trip.status?.id]}</div>
-              {trip.totalFare && <p>Fare: ₹{trip.totalFare}</p>}
-              {trip.distanceKm && <p>Distance: {trip.distanceKm} km</p>}
+              {trip.totalFare && (
+                <div className="fare-grid" style={{marginTop: 8}}>
+                  <span>Base</span><span>₹{trip.baseFare}</span>
+                  <span>Distance ({trip.distanceKm} km)</span><span>₹{trip.distanceFare}</span>
+                  <span>Time ({trip.durationMinutes} min)</span><span>₹{trip.timeFare}</span>
+                  <span className="fare-total">Total</span><span className="fare-total">₹{trip.totalFare}</span>
+                </div>
+              )}
             </>
           ) : <p className="muted">Waiting...</p>}
         </div>

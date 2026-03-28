@@ -1,5 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '../services/api';
+import { MapContainer, TileLayer, Marker } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+
+// Fix default marker icons
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+});
 
 const RIDE_STATUS = {
   201: 'REQUESTED', 203: 'DRIVER_ASSIGNED', 204: 'DRIVER_ACCEPTED', 206: 'COMPLETED',
@@ -21,16 +32,43 @@ export default function DriverView() {
   const [trip, setTrip] = useState(null);
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [earnings, setEarnings] = useState({ today: 0, total: 0, trips: 0 });
   const pollRef = useRef(null);
 
   const [regForm, setRegForm] = useState({ name: '', phone: '', vehicleTypeId: 501, licensePlate: '' });
-  const [location, setLocation] = useState({ lat: 19.076, lng: 72.877 });
+  const [location, setLocation] = useState({ lat: 0, lng: 0 });
+
+  // Get user's actual location on mount
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => setLocation({ lat: 19.076, lng: 72.877 }) // fallback to Mumbai
+      );
+    }
+  }, []);
 
   const addLog = (msg) => setLogs((prev) => [...prev, `${new Date().toLocaleTimeString()} - ${msg}`]);
 
   // Persist to localStorage
   useEffect(() => { if (driver) localStorage.setItem('driver', JSON.stringify(driver)); }, [driver]);
   useEffect(() => { localStorage.setItem('driverOnline', isOnline.toString()); }, [isOnline]);
+
+  // Fetch earnings from backend
+  useEffect(() => {
+    if (!driver?.id) return;
+    const fetchEarnings = async () => {
+      const res = await api.getDriverEarnings(driver.id);
+      if (res.success && res.data) {
+        setEarnings({
+          today: parseFloat(res.data.today_earnings) || 0,
+          total: parseFloat(res.data.total_earnings) || 0,
+          trips: parseInt(res.data.total_trips) || 0,
+        });
+      }
+    };
+    fetchEarnings();
+  }, [driver?.id]);
 
   // Re-sync driver status on mount
   useEffect(() => {
@@ -122,10 +160,19 @@ export default function DriverView() {
     if (!trip) return;
     setLoading(true);
     addLog('Ending trip...');
-    const res = await api.endTrip(trip.id, 19.100, 72.900);
+    const res = await api.endTrip(trip.id, null, null);
     if (res.success) {
       setTrip(res.data);
       addLog(`Trip ended! Fare: ₹${res.data.totalFare}`);
+      // Refresh earnings from backend
+      const earningsRes = await api.getDriverEarnings(driver.id);
+      if (earningsRes.success && earningsRes.data) {
+        setEarnings({
+          today: parseFloat(earningsRes.data.today_earnings) || 0,
+          total: parseFloat(earningsRes.data.total_earnings) || 0,
+          trips: parseInt(earningsRes.data.total_trips) || 0,
+        });
+      }
       setAssignedRide(null);
       setIsOnline(true);
     } else addLog(`Error: ${res.error?.message}`);
@@ -143,22 +190,60 @@ export default function DriverView() {
     } else addLog(`Error: ${res.error?.message}`);
   };
 
+  const [phoneInput, setPhoneInput] = useState('');
+  const [showFullForm, setShowFullForm] = useState(false);
+
+  const checkPhone = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    const res = await api.lookupDriver(phoneInput);
+    if (res.success && res.data) {
+      localStorage.setItem('driverToken', res.data.token);
+      setDriver(res.data.user);
+      addLog(`Welcome back, ${res.data.user.name}!`);
+    } else {
+      setShowFullForm(true);
+      setRegForm({ ...regForm, phone: phoneInput });
+      addLog('New driver — please complete registration.');
+    }
+    setLoading(false);
+  };
+
   if (!driver) {
+    if (!showFullForm) {
+      return (
+        <div className="panel">
+          <h2>🚗 Driver</h2>
+          <p className="muted" style={{marginBottom: 12}}>Enter your phone number to login or register.</p>
+          <form onSubmit={checkPhone}>
+            <label className="form-label">Phone Number</label>
+            <input type="tel" placeholder="10-digit mobile number" required pattern="[6-9][0-9]{9}" maxLength={10}
+              value={phoneInput} onChange={(e) => setPhoneInput(e.target.value)} />
+            <button type="submit" disabled={loading}>{loading ? 'Checking...' : '→ Continue'}</button>
+          </form>
+        </div>
+      );
+    }
     return (
       <div className="panel">
-        <h2>🚗 Driver Registration</h2>
+        <h2>🚗 Complete Registration</h2>
+        <p className="muted" style={{marginBottom: 12}}>Phone: {regForm.phone}</p>
         <form onSubmit={register}>
-          <input type="text" placeholder="Name" required value={regForm.name}
+          <label className="form-label">Full Name</label>
+          <input type="text" placeholder="Enter your name" required value={regForm.name}
             onChange={(e) => setRegForm({ ...regForm, name: e.target.value })} />
-          <input type="tel" placeholder="Phone (10 digits)" required pattern="[6-9][0-9]{9}" maxLength={10}
+          <label className="form-label">Phone Number</label>
+          <input type="tel" placeholder="10-digit mobile number" required pattern="[6-9][0-9]{9}" maxLength={10}
             value={regForm.phone} onChange={(e) => setRegForm({ ...regForm, phone: e.target.value })} />
+          <label className="form-label">Vehicle Type</label>
           <select value={regForm.vehicleTypeId}
             onChange={(e) => setRegForm({ ...regForm, vehicleTypeId: Number(e.target.value) })}>
             {VEHICLE_TYPES.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
           </select>
-          <input type="text" placeholder="License Plate" required value={regForm.licensePlate}
+          <label className="form-label">License Plate</label>
+          <input type="text" placeholder="e.g. MH01AB1234" required value={regForm.licensePlate}
             onChange={(e) => setRegForm({ ...regForm, licensePlate: e.target.value })} />
-          <button type="submit" disabled={loading}>{loading ? 'Registering...' : 'Register'}</button>
+          <button type="submit" disabled={loading}>{loading ? 'Please wait...' : '→ Continue'}</button>
         </form>
       </div>
     );
@@ -175,20 +260,42 @@ export default function DriverView() {
           localStorage.removeItem('driver');
           localStorage.removeItem('driverOnline');
           localStorage.removeItem('driverToken');
-          setDriver(null); setIsOnline(false); setAssignedRide(null); setTrip(null); setLogs([]);
+          setDriver(null); setIsOnline(false); setAssignedRide(null); setTrip(null); setLogs([]); setEarnings({ today: 0, total: 0, trips: 0 });
         }}>Logout</button>
+      </div>
+
+      <div className="earnings-bar">
+        <div className="earning-item">
+          <span className="earning-label">Today</span>
+          <span className="earning-value">₹{earnings.today.toFixed(0)}</span>
+        </div>
+        <div className="earning-item">
+          <span className="earning-label">Total</span>
+          <span className="earning-value">₹{earnings.total.toFixed(0)}</span>
+        </div>
+        <div className="earning-item">
+          <span className="earning-label">Trips</span>
+          <span className="earning-value">{earnings.trips}</span>
+        </div>
       </div>
 
       {!isOnline ? (
         <div className="card">
           <h3>Go Online</h3>
-          <div className="form-row">
-            <input type="number" step="any" placeholder="Lat" value={location.lat}
-              onChange={(e) => setLocation({ ...location, lat: Number(e.target.value) })} />
-            <input type="number" step="any" placeholder="Lng" value={location.lng}
-              onChange={(e) => setLocation({ ...location, lng: Number(e.target.value) })} />
-          </div>
-          <button onClick={goOnline} disabled={loading} className="btn-accept">
+          {location.lat ? (
+            <>
+              <div className="map-container">
+                <MapContainer center={[location.lat, location.lng]} zoom={15} style={{ height: '200px', width: '100%', borderRadius: '8px' }}>
+                  <TileLayer attribution='&copy; OpenStreetMap' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                  <Marker position={[location.lat, location.lng]} />
+                </MapContainer>
+              </div>
+              <p className="muted" style={{marginBottom: 8}}>📍 Your location detected</p>
+            </>
+          ) : (
+            <p className="muted" style={{marginBottom: 8}}>📡 Detecting your location...</p>
+          )}
+          <button onClick={goOnline} disabled={loading || !location.lat} className="btn-accept">
             {loading ? 'Going online...' : '🟢 Go Online'}
           </button>
         </div>
