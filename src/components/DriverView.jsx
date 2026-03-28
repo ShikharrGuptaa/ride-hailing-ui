@@ -197,8 +197,12 @@ export default function DriverView() {
     setLoading(false);
   };
 
-  // Allow driver to manually enter a ride ID to accept (simulating push notification)
   const [manualRideId, setManualRideId] = useState('');
+  const [showVehicleSwitch, setShowVehicleSwitch] = useState(false);
+  const [switchForm, setSwitchForm] = useState({
+    vehicleTypeId: driver?.vehicleType?.id || 501,
+    licensePlate: driver?.licensePlate || ''
+  });
   const loadRide = async () => {
     if (!manualRideId) return;
     const res = await api.getRide(manualRideId);
@@ -206,6 +210,18 @@ export default function DriverView() {
       setAssignedRide(res.data);
       addLog(`Loaded ride: ${RIDE_STATUS[res.data.status?.id]}`);
     } else addLog(`Error: ${res.error?.message}`);
+  };
+
+  const switchVehicle = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    const res = await api.updateVehicleType(driver.id, switchForm.vehicleTypeId, switchForm.licensePlate);
+    if (res.success) {
+      setDriver(res.data);
+      setShowVehicleSwitch(false);
+      addLog(`Switched to ${VEHICLE_TYPES.find(v => v.id === switchForm.vehicleTypeId)?.label}`);
+    } else addLog(`Error: ${res.error?.message}`);
+    setLoading(false);
   };
 
   const [phoneInput, setPhoneInput] = useState('');
@@ -268,9 +284,17 @@ export default function DriverView() {
     <div className="panel">
       <div className="user-bar">
         🚗 {driver.name} ({driver.phone})
+        <span style={{fontSize: 12, opacity: 0.7, marginLeft: 4}}>
+          · {VEHICLE_TYPES.find(v => v.id === driver.vehicleType?.id)?.label || 'Unknown'} · {driver.licensePlate || '—'}
+        </span>
         <span className={`online-dot ${isOnline ? 'online' : 'offline'}`}>
           {isOnline ? '🟢 Online' : '🔴 Offline'}
         </span>
+        {!isOnline && (
+          <button className="btn-small" onClick={() => { setShowVehicleSwitch(!showVehicleSwitch); setSwitchForm({ vehicleTypeId: driver.vehicleType?.id || 501, licensePlate: driver.licensePlate || '' }); }}>
+            🔄 Switch Vehicle
+          </button>
+        )}
         <button className="btn-small" onClick={() => {
           localStorage.removeItem('driver');
           localStorage.removeItem('driverOnline');
@@ -278,6 +302,23 @@ export default function DriverView() {
           setDriver(null); setIsOnline(false); setAssignedRide(null); setTrip(null); setLogs([]); setEarnings({ today: 0, total: 0, trips: 0 });
         }}>Logout</button>
       </div>
+
+      {showVehicleSwitch && (
+        <div className="card" style={{marginBottom: 12}}>
+          <h3>🔄 Switch Vehicle</h3>
+          <form onSubmit={switchVehicle}>
+            <label className="form-label">Vehicle Type</label>
+            <select value={switchForm.vehicleTypeId}
+              onChange={(e) => setSwitchForm({ ...switchForm, vehicleTypeId: Number(e.target.value) })}>
+              {VEHICLE_TYPES.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
+            </select>
+            <label className="form-label">License Plate</label>
+            <input type="text" value={switchForm.licensePlate}
+              onChange={(e) => setSwitchForm({ ...switchForm, licensePlate: e.target.value })} />
+            <button type="submit" disabled={loading}>{loading ? 'Updating...' : '✅ Update'}</button>
+          </form>
+        </div>
+      )}
 
       <div className="earnings-bar">
         <div className="earning-item">

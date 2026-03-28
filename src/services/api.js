@@ -42,4 +42,7 @@ export const api = {
   // Shared
   getTripByRide: (rideId) => request(`/trips/by-ride/${rideId}`),
   endTrip: (tripId, endLat, endLng) => request(`/trips/${tripId}/end`, { method: 'POST', body: JSON.stringify({ endLat, endLng }) }, 'driver'),
+  cancelRide: (rideId, riderId) => request(`/rides/${rideId}/cancel`, { method: 'POST', body: JSON.stringify({ riderId }) }, 'rider'),
+  getDriver: (id) => request(`/drivers/${id}`, {}, 'driver'),
+  updateVehicleType: (driverId, vehicleTypeId, licensePlate) => request(`/drivers/${driverId}/vehicle`, { method: 'POST', body: JSON.stringify({ vehicleTypeId, licensePlate }) }, 'driver'),
 };

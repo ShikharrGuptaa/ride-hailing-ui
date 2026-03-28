@@ -20,6 +20,7 @@ export default function RiderView() {
   const [ride, setRide] = useState(() => load('riderRide'));
   const [trip, setTrip] = useState(() => load('riderTrip'));
   const [payment, setPayment] = useState(() => load('riderPayment'));
+  const [driverInfo, setDriverInfo] = useState(() => load('riderDriverInfo'));
   const [logs, setLogs] = useState(() => load('riderLogs') || []);
   const [loading, setLoading] = useState(false);
   const pollRef = useRef(null);
@@ -69,6 +70,20 @@ export default function RiderView() {
   useEffect(() => { save('riderRide', ride); }, [ride]);
   useEffect(() => { save('riderTrip', trip); }, [trip]);
   useEffect(() => { save('riderPayment', payment); }, [payment]);
+  useEffect(() => { save('riderDriverInfo', driverInfo); }, [driverInfo]);
+
+  // Fetch driver info when driver is assigned
+  useEffect(() => {
+    if (!ride?.driverId || driverInfo?.id === ride.driverId) return;
+    const fetchDriver = async () => {
+      const res = await api.getDriver(ride.driverId);
+      if (res.success) {
+        setDriverInfo(res.data);
+        addLog(`Driver: ${res.data.name} (${VEHICLE_TYPES.find(v => v.id === res.data.vehicleType?.id)?.label || 'Unknown'})`);
+      }
+    };
+    fetchDriver();
+  }, [ride?.driverId]);
 
   // On mount: restore full state from backend
   useEffect(() => {
@@ -199,14 +214,28 @@ export default function RiderView() {
   };
 
   const newRide = () => {
-    setRide(null); setTrip(null); setPayment(null);
-    save('riderRide', null); save('riderTrip', null); save('riderPayment', null);
+    setRide(null); setTrip(null); setPayment(null); setDriverInfo(null);
+    save('riderRide', null); save('riderTrip', null); save('riderPayment', null); save('riderDriverInfo', null);
     addLog('Ready for a new ride.');
   };
 
+  const cancelRide = async () => {
+    if (!ride?.id || !rider?.id) return;
+    setLoading(true);
+    addLog('Cancelling ride...');
+    const res = await api.cancelRide(ride.id, rider.id);
+    if (res.success) {
+      setRide(res.data);
+      addLog('Ride cancelled.');
+    } else {
+      addLog(`Error: ${res.error?.message}`);
+    }
+    setLoading(false);
+  };
+
   const logout = () => {
-    ['rider', 'riderRide', 'riderTrip', 'riderPayment', 'riderLogs', 'riderToken'].forEach(k => localStorage.removeItem(k));
-    setRider(null); setRide(null); setTrip(null); setPayment(null); setLogs([]);
+    ['rider', 'riderRide', 'riderTrip', 'riderPayment', 'riderDriverInfo', 'riderLogs', 'riderToken'].forEach(k => localStorage.removeItem(k));
+    setRider(null); setRide(null); setTrip(null); setPayment(null); setDriverInfo(null); setLogs([]);
   };
 
   const [phoneInput, setPhoneInput] = useState('');
@@ -279,8 +308,24 @@ export default function RiderView() {
             <>
               <div className={`status-badge status-${ride.status?.id}`}>{RIDE_STATUS[ride.status?.id]}</div>
               <p>Est. Fare: ₹{ride.estimatedFare}</p>
-              {ride.driverId && <p>Driver assigned ✅</p>}
+              {driverInfo && (
+                <div style={{marginTop: 8, padding: '8px 12px', background: 'rgba(59,130,246,0.08)', borderRadius: 8}}>
+                  <p>🚘 {driverInfo.name}</p>
+                  <p style={{fontSize: 13, opacity: 0.8}}>
+                    {VEHICLE_TYPES.find(v => v.id === driverInfo.vehicleType?.id)?.label || 'Vehicle'} · {driverInfo.licensePlate || '—'}
+                  </p>
+                </div>
+              )}
+              {!driverInfo && ride.driverId && <p>Driver assigned ✅</p>}
               {ride.status?.id === 204 && <p>Driver on the way 🚗</p>}
+              {ride.status?.id < 205 && (
+                <button onClick={cancelRide} disabled={loading} className="btn-cancel" style={{marginTop: 12}}>
+                  ❌ Cancel Ride
+                </button>
+              )}
+              {ride.status?.id === 207 && (
+                <button onClick={newRide} className="btn-accept" style={{marginTop: 12}}>🆕 New Ride</button>
+              )}
               {isRideComplete && isPaymentDone && (
                 <button onClick={newRide} className="btn-accept" style={{marginTop: 12}}>🆕 New Ride</button>
               )}

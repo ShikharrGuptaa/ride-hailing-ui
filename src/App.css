@@ -250,3 +250,18 @@ input::placeholder { color: #64748b; }
 }
 .earning-label { display: block; font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
 .earning-value { display: block; font-size: 22px; font-weight: 700; color: #4ade80; }
+
+.btn-cancel {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  width: 100%;
+  transition: all 0.2s;
+}
+.btn-cancel:hover { opacity: 0.9; transform: translateY(-1px); }
+.btn-cancel:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
