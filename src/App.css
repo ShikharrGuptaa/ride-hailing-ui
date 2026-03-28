@@ -1,0 +1,129 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #0f172a;
+  color: #e2e8f0;
+  min-height: 100vh;
+}
+
+.app {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+h1 { text-align: center; margin-bottom: 24px; font-size: 28px; }
+h2 { margin-bottom: 16px; color: #94a3b8; }
+h3 { margin-bottom: 12px; }
+
+.panel, .dashboard { background: #1e293b; border-radius: 12px; padding: 24px; }
+
+.setup-row { display: flex; gap: 16px; }
+.setup-card {
+  flex: 1; background: #334155; border-radius: 8px; padding: 20px;
+}
+
+.info p { margin: 4px 0; }
+.id { font-size: 11px; color: #64748b; font-family: monospace; }
+.muted { color: #64748b; font-style: italic; }
+.error { background: #7f1d1d; color: #fca5a5; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; }
+
+button {
+  background: #3b82f6; color: white; border: none; padding: 10px 20px;
+  border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600;
+  transition: background 0.2s;
+}
+button:hover { background: #2563eb; }
+button:disabled { background: #475569; cursor: not-allowed; }
+
+.dashboard-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+.card {
+  background: #334155; border-radius: 8px; padding: 20px;
+  min-height: 150px;
+}
+.card p { margin: 6px 0; font-size: 14px; }
+
+.status-badge {
+  display: inline-block; padding: 4px 12px; border-radius: 20px;
+  font-size: 12px; font-weight: 700; margin-bottom: 8px;
+}
+.status-201, .status-202 { background: #854d0e; color: #fef08a; }
+.status-203 { background: #1e40af; color: #93c5fd; }
+.status-204, .status-205 { background: #166534; color: #86efac; }
+.status-206 { background: #14532d; color: #4ade80; }
+.status-207 { background: #7f1d1d; color: #fca5a5; }
+.trip-301 { background: #166534; color: #86efac; }
+.trip-303 { background: #14532d; color: #4ade80; }
+.payment-401 { background: #854d0e; color: #fef08a; }
+.payment-402 { background: #1e40af; color: #93c5fd; }
+.payment-403 { background: #14532d; color: #4ade80; }
+.payment-404 { background: #7f1d1d; color: #fca5a5; }
+
+.actions { display: flex; gap: 12px; margin-bottom: 20px; }
+.btn-accept { background: #16a34a; }
+.btn-accept:hover { background: #15803d; }
+.btn-end { background: #ea580c; }
+.btn-end:hover { background: #c2410c; }
+.btn-pay { background: #7c3aed; }
+.btn-pay:hover { background: #6d28d9; }
+
+.log-panel {
+  background: #1a1a2e; border-radius: 8px; padding: 16px;
+  max-height: 300px; overflow-y: auto;
+}
+.log-entries { font-family: monospace; font-size: 13px; }
+.log-entry { padding: 4px 0; border-bottom: 1px solid #1e293b; color: #94a3b8; }
+
+form { display: flex; flex-direction: column; gap: 8px; }
+input, select {
+  background: #1e293b; border: 1px solid #475569; color: #e2e8f0;
+  padding: 8px 12px; border-radius: 6px; font-size: 14px;
+}
+input:focus, select:focus { outline: none; border-color: #3b82f6; }
+input::placeholder { color: #64748b; }
+.form-row { display: flex; gap: 8px; }
+.form-row input { flex: 1; }
+.fare-breakdown { margin-top: 8px; font-size: 12px; color: #94a3b8; }
+
+.tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+.tab {
+  flex: 1; padding: 12px; border-radius: 8px 8px 0 0;
+  background: #1e293b; border: none; color: #94a3b8;
+  font-size: 16px; font-weight: 600; cursor: pointer;
+}
+.tab.active { background: #334155; color: #e2e8f0; }
+.user-bar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 12px; background: #334155; border-radius: 6px;
+  margin-bottom: 16px; font-weight: 600;
+}
+.online-dot { font-size: 14px; }
+
+.btn-small {
+  background: #475569; padding: 4px 12px; font-size: 12px;
+  border-radius: 4px;
+}
+.btn-small:hover { background: #64748b; }
+
+.home { max-width: 600px; margin: 0 auto; padding: 48px 24px; text-align: center; }
+.home h1 { font-size: 36px; margin-bottom: 8px; }
+.role-cards { display: flex; gap: 16px; margin-top: 32px; }
+.role-card {
+  flex: 1; background: #1e293b; border-radius: 12px; padding: 32px 20px;
+  text-decoration: none; color: #e2e8f0; transition: transform 0.2s, background 0.2s;
+  border: 2px solid transparent;
+}
+.role-card:hover { transform: translateY(-4px); border-color: #3b82f6; background: #334155; }
+.role-card h2 { margin: 12px 0 8px; }
+.role-card p { color: #94a3b8; font-size: 14px; }
+.role-icon { font-size: 48px; }
+.back { text-decoration: none; color: #64748b; margin-right: 8px; font-size: 20px; }
+.back:hover { color: #e2e8f0; }
+
+.ride-list { display: flex; flex-direction: column; gap: 8px; }
+.ride-item {
+  display: flex; justify-content: space-between; align-items: center;
+  background: #1e293b; padding: 10px 12px; border-radius: 6px;
+}
+.ride-item p { margin: 2px 0; font-size: 13px; }
