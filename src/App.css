@@ -265,3 +265,5 @@ input::placeholder { color: #64748b; }
 }
 .btn-cancel:hover { opacity: 0.9; transform: translateY(-1px); }
 .btn-cancel:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+.status-208 { background: #f59e0b; color: #000; }

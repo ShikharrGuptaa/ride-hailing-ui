@@ -5,7 +5,7 @@ import LocationPicker from './LocationPicker';
 
 const RIDE_STATUS = {
   201: 'REQUESTED', 202: 'MATCHING', 203: 'DRIVER_ASSIGNED',
-  204: 'DRIVER_ACCEPTED', 205: 'IN_PROGRESS', 206: 'COMPLETED', 207: 'CANCELLED',
+  204: 'DRIVER_ACCEPTED', 205: 'IN_PROGRESS', 206: 'COMPLETED', 207: 'CANCELLED', 208: 'PAYMENT_PENDING',
 };
 const TRIP_STATUS = { 301: 'IN_PROGRESS', 302: 'PAUSED', 303: 'COMPLETED' };
 const PAYMENT_STATUS = { 401: 'PENDING', 402: 'PROCESSING', 403: 'COMPLETED', 404: 'FAILED' };
@@ -185,6 +185,11 @@ export default function RiderView() {
         if (confirmRes.success) {
           setPayment(confirmRes.data);
           addLog('Payment confirmed!');
+          // Refresh ride status
+          if (ride?.id) {
+            const rideRes = await api.getRide(ride.id);
+            if (rideRes.success) setRide(rideRes.data);
+          }
         }
       },
       prefill: { name: rider?.name, email: rider?.email, contact: rider?.phone },
@@ -293,6 +298,7 @@ export default function RiderView() {
   }
 
   const isRideComplete = ride?.status?.id === 206;
+  const isPaymentPending = ride?.status?.id === 208;
   const isPaymentDone = payment?.status?.id === 403;
 
   return (
@@ -393,7 +399,7 @@ export default function RiderView() {
                 </button>
               )}
             </>
-          ) : trip?.status?.id === 303 ? (
+          ) : (trip?.status?.id === 303 || isPaymentPending) ? (
             <button onClick={makePayment} disabled={loading} className="btn-pay">💳 Pay via Razorpay</button>
           ) : <p className="muted">No payment yet</p>}
         </div>

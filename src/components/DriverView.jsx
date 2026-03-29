@@ -14,7 +14,7 @@ L.Icon.Default.mergeOptions({
 });
 
 const RIDE_STATUS = {
-  201: 'REQUESTED', 203: 'DRIVER_ASSIGNED', 204: 'DRIVER_ACCEPTED', 206: 'COMPLETED',
+  201: 'REQUESTED', 203: 'DRIVER_ASSIGNED', 204: 'DRIVER_ACCEPTED', 206: 'COMPLETED', 208: 'PAYMENT_PENDING',
 };
 const TRIP_STATUS = { 301: 'IN_PROGRESS', 303: 'COMPLETED' };
 const DRIVER_STATUS = { 101: 'ONLINE', 102: 'OFFLINE', 103: 'ON_TRIP' };
@@ -69,16 +69,38 @@ export default function DriverView() {
       }
     };
     fetchEarnings();
-  }, [driver?.id]);
+  }, [driver?.id, isOnline]);
 
   // Re-sync driver status on mount
   useEffect(() => {
     if (!driver?.id || !isOnline) return;
     const resync = async () => {
-      // Re-set online status and location in backend
       await api.updateDriverStatus(driver.id, 101);
       await api.updateDriverLocation(driver.id, location.lat, location.lng);
       addLog('Reconnected - online');
+      // Re-subscribe to WebSocket topics
+      connectWebSocket(() => {
+        subscribe('/topic/rides/available', (ride) => {
+          setAvailableRides(prev => {
+            if (prev.find(r => r.id === ride.id)) return prev;
+            return [...prev, ride];
+          });
+        });
+        subscribe(`/topic/drivers/${driver.id}/rides`, (ride) => {
+          setAssignedRide(ride);
+        });
+        subscribe(`/topic/drivers/${driver.id}/payments`, async (payment) => {
+          addLog(`💰 Payment received: ₹${payment.amount}`);
+          const res = await api.getDriverEarnings(driver.id);
+          if (res.success && res.data) {
+            setEarnings({
+              today: parseFloat(res.data.today_earnings) || 0,
+              total: parseFloat(res.data.total_earnings) || 0,
+              trips: parseInt(res.data.total_trips) || 0,
+            });
+          }
+        });
+      });
     };
     resync();
   }, []);
@@ -145,6 +167,17 @@ export default function DriverView() {
       subscribe(`/topic/drivers/${driver.id}/rides`, (ride) => {
         addLog(`📍 Ride update: status ${ride.status?.id}`);
         setAssignedRide(ride);
+      });
+      subscribe(`/topic/drivers/${driver.id}/payments`, async (payment) => {
+        addLog(`💰 Payment received: ₹${payment.amount}`);
+        const res = await api.getDriverEarnings(driver.id);
+        if (res.success && res.data) {
+          setEarnings({
+            today: parseFloat(res.data.today_earnings) || 0,
+            total: parseFloat(res.data.total_earnings) || 0,
+            trips: parseInt(res.data.total_trips) || 0,
+          });
+        }
       });
     });
 
