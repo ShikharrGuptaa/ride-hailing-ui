@@ -10,6 +10,16 @@ async function request(path, options = {}, role = null) {
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const res = await fetch(`${BASE}${path}`, { headers, ...options });
+
+  // Handle expired/invalid token — force logout
+  if (res.status === 401) {
+    console.warn('Token expired or invalid, clearing session');
+    ['rider', 'riderRide', 'riderTrip', 'riderPayment', 'riderDriverInfo', 'riderLogs', 'riderToken',
+     'driver', 'driverOnline', 'driverToken'].forEach(k => localStorage.removeItem(k));
+    window.location.reload();
+    return { success: false, error: { message: 'Session expired. Please login again.' } };
+  }
+
   return res.json();
 }
 
