@@ -35,6 +35,8 @@ export default function DriverView() {
   const [loading, setLoading] = useState(false);
   const [earnings, setEarnings] = useState({ today: 0, total: 0, trips: 0 });
   const pollRef = useRef(null);
+  const locationRef = useRef(null);
+  const locationTrackRef = useRef(null);
 
   const [regForm, setRegForm] = useState({ name: '', phone: '', vehicleTypeId: 501, licensePlate: '' });
   const [location, setLocation] = useState({ lat: 0, lng: 0 });
@@ -50,6 +52,22 @@ export default function DriverView() {
   }, []);
 
   const addLog = (msg) => setLogs((prev) => [...prev, `${new Date().toLocaleTimeString()} - ${msg}`]);
+
+  // Keep locationRef in sync
+  useEffect(() => { locationRef.current = location; }, [location]);
+
+  // Haversine distance in km (for client-side WebSocket filtering)
+  const haversineKm = (lat1, lng1, lat2, lng2) => {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  };
+
+  const RIDE_VISIBILITY_KM = 10;
 
   // Persist to localStorage
   useEffect(() => { if (driver) localStorage.setItem('driver', JSON.stringify(driver)); }, [driver]);
@@ -81,6 +99,11 @@ export default function DriverView() {
       // Re-subscribe to WebSocket topics
       connectWebSocket(() => {
         subscribe('/topic/rides/available', (ride) => {
+          const loc = locationRef.current;
+          if (loc && loc.lat) {
+            const dist = haversineKm(loc.lat, loc.lng, ride.pickupLat, ride.pickupLng);
+            if (dist > RIDE_VISIBILITY_KM) return;
+          }
           setAvailableRides(prev => {
             if (prev.find(r => r.id === ride.id)) return prev;
             return [...prev, ride];
@@ -122,7 +145,8 @@ export default function DriverView() {
         }
         // No active ride — check for available rides
         const vehicleTypeId = driver.vehicleType?.id || 501;
-        const ridesRes = await api.getAvailableRides(vehicleTypeId);
+        const regionId = driver.region?.id || null;
+        const ridesRes = await api.getAvailableRides(vehicleTypeId, location.lat, location.lng, regionId);
         if (ridesRes.success && ridesRes.data) {
           setAvailableRides(ridesRes.data);
         }
@@ -155,9 +179,28 @@ export default function DriverView() {
     setIsOnline(true);
     addLog('Online — listening for rides via WebSocket');
 
+    // Start continuous location tracking
+    locationTrackRef.current = setInterval(() => {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const newLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            setLocation(newLoc);
+            api.updateDriverLocation(driver.id, newLoc.lat, newLoc.lng);
+          },
+          () => {} // silently ignore errors
+        );
+      }
+    }, 30000);
+
     // Connect WebSocket and subscribe to available rides
     connectWebSocket(() => {
       subscribe('/topic/rides/available', (ride) => {
+        const loc = locationRef.current;
+        if (loc && loc.lat) {
+          const dist = haversineKm(loc.lat, loc.lng, ride.pickupLat, ride.pickupLng);
+          if (dist > RIDE_VISIBILITY_KM) return;
+        }
         addLog(`🔔 New ride available! Fare: ₹${ride.estimatedFare}`);
         setAvailableRides(prev => {
           if (prev.find(r => r.id === ride.id)) return prev;
@@ -188,6 +231,10 @@ export default function DriverView() {
     setLoading(true);
     await api.updateDriverStatus(driver.id, 102);
     setIsOnline(false);
+    if (locationTrackRef.current) {
+      clearInterval(locationTrackRef.current);
+      locationTrackRef.current = null;
+    }
     disconnect();
     addLog('Went offline — WebSocket disconnected');
     setLoading(false);

@@ -45,7 +45,11 @@ export const api = {
   acceptRide: (driverId, rideId) => request(`/drivers/${driverId}/accept`, { method: 'POST', body: JSON.stringify({ rideId }) }, 'driver'),
   getActiveRide: (driverId) => request(`/drivers/${driverId}/active-ride`, {}, 'driver'),
   getDriverEarnings: (driverId) => request(`/drivers/${driverId}/earnings`, {}, 'driver'),
-  getAvailableRides: (vehicleTypeId) => request(`/rides/available?vehicleTypeId=${vehicleTypeId}`),
+  getAvailableRides: (vehicleTypeId, driverLat, driverLng, regionId) => {
+    let url = `/rides/available?vehicleTypeId=${vehicleTypeId}&driverLat=${driverLat}&driverLng=${driverLng}`;
+    if (regionId) url += `&regionId=${regionId}`;
+    return request(url);
+  },
   estimateFare: (pickupLat, pickupLng, destLat, destLng, vehicleTypeId) =>
     request(`/rides/estimate?pickupLat=${pickupLat}&pickupLng=${pickupLng}&destLat=${destLat}&destLng=${destLng}&vehicleTypeId=${vehicleTypeId}`),
 
